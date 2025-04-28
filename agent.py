@@ -1,5 +1,3 @@
-# agent.py
-
 from config import SOURCE_SECRET
 from payments import send_payment
 
