@@ -1,5 +1,4 @@
-
-from stellar_sdk import Server, Keypair, TransactionBuilder, Network
+from stellar_sdk import Server, Keypair, TransactionBuilder, Network, Asset
 from config import HORIZON_URL, NETWORK_PASSPHRASE
 
 server = Server(HORIZON_URL)
@@ -14,7 +13,11 @@ def send_payment(source_secret, destination_public, amount):
             network_passphrase=NETWORK_PASSPHRASE,
             base_fee=100,
         )
-        .append_payment_op(destination=destination_public, amount=str(amount), asset_code="XLM")
+        .append_payment_op(
+            destination=destination_public, 
+            amount=str(amount), 
+            asset=Asset.native()  # For XLM, use Asset.native() instead of asset_code
+        )
         .set_timeout(30)
         .build()
     )
