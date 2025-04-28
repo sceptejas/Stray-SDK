@@ -112,6 +112,6 @@ Feel free to use, modify, and share it!
 
 ## 💬 Contact
 
-Built with ❤️ by [Your Name or GitHub Handle].  
+Built with ❤️ by sceptejas  
 Contributions welcome!
 
