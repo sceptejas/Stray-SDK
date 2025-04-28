@@ -1,5 +1,7 @@
 HORIZON_URL = "https://horizon-testnet.stellar.org"
 NETWORK_PASSPHRASE = "Test SDF Network ; September 2015"
-SOURCE_SECRET = "YOUR_TESTNET_SECRET_KEY"
-MONITOR_ACCOUNT_ID = "YOUR_PUBLIC_KEY"
-DESTINATION_ACCOUNT_ID = "DESTINATION_PUBLIC_KEY"
+
+# Replace these with your actual keys
+SOURCE_SECRET = "YOUR_TESTNET_SECRET_KEY"  # Replace with your actual secret key
+MONITOR_ACCOUNT_ID = "YOUR_PUBLIC_KEY"     # Replace with your actual public key
+DESTINATION_ACCOUNT_ID = "DESTINATION_PUBLIC_KEY"  # Optional default destination
