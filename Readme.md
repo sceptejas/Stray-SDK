@@ -11,9 +11,13 @@ We welcome meaningful contributions that improve the project's functionality, do
 ## Features
 
 - 🚀 Simple interactive CLI for sending Stellar payments
-- ✅ Input validation for addresses and amounts
+- 🔐 **NEW: Multi-signature transaction support with XDR workflow**
+- ✅ Input validation for addresses and amounts  
 - 🔒 Environment-based configuration for security
 - 🧪 Testnet support out of the box
+- 📤 Transaction building without immediate submission
+- 🔑 Signature collection and verification
+- 📋 XDR export/import for collaborative signing
 
 ## Installation
 
@@ -47,6 +51,8 @@ NETWORK_PASSPHRASE=Test SDF Network ; September 2015
 
 ## Usage
 
+### Basic Payment (Single Signature)
+
 Run the CLI:
 ```bash
 python main.py
@@ -60,13 +66,35 @@ stellar-agent
 
 Follow the prompts to send payments:
 ```
---- Stellar Agent ---
-Enter destination public key (or type 'exit' to quit): GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H
+🌟 Stellar Agent CLI - Multi-signature Support
+Type 'help' for available commands
+
+stellar-agent> send
+Enter destination public key: GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H
 Enter amount to send (in XLM): 10
 Sending 10 XLM to GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H...
 ✅ Transaction Successful!
 Transaction Hash: abc123...
 ```
+
+### New Multi-Signature Support 🔐
+
+The CLI now supports multi-signature transactions with these commands:
+
+- `build` - Build transaction without submitting
+- `sign` - Add signature to transaction XDR  
+- `submit` - Submit fully signed transaction
+- `info` - Show transaction information from XDR
+- `multisig` - Check account signature requirements
+
+**Quick Example for Multisig:**
+```bash
+python main.py build     # Build transaction, get XDR
+python main.py sign      # Add signatures from other signers
+python main.py submit    # Submit when threshold met
+```
+
+**📖 For detailed multisig workflow, see [MULTISIG_GUIDE.md](MULTISIG_GUIDE.md)**
 
 ## Development
 
