@@ -1,7 +1,7 @@
 """Stellar blockchain client for payment operations."""
 from stellar_sdk import Server, Keypair, TransactionBuilder, Asset
 from stellar_sdk.operation import Payment
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
 from .config import config
 
 class StellarClient:
@@ -22,7 +22,65 @@ class StellarClient:
         """
         response = self.server.accounts().account_id(account_id).call()
         return response
-    
+
+    def get_balance(self, account_id: str) -> List[Dict[str, str]]:
+        """
+        Fetch all asset balances for an account.
+
+        Args:
+            account_id: Public key of the account
+
+        Returns:
+            List of dicts with 'asset' and 'balance' keys
+        """
+        info = self.get_account_info(account_id)
+        balances = []
+        for b in info.get("balances", []):
+            asset = b.get("asset_type")
+            if asset == "native":
+                asset = "XLM"
+            else:
+                asset = b.get("asset_code", "UNKNOWN")
+            balances.append({"asset": asset, "balance": b.get("balance", "0")})
+        return balances
+
+    def get_transaction_history(
+        self, account_id: str, limit: int = 10
+    ) -> List[Dict[str, Any]]:
+        """
+        Fetch recent transactions for an account.
+
+        Args:
+            account_id: Public key of the account
+            limit: Number of transactions to retrieve (default 10, max 200)
+
+        Returns:
+            List of transaction summary dicts
+        """
+        limit = max(1, min(limit, 200))
+        records = (
+            self.server.transactions()
+            .for_account(account_id)
+            .order(desc=True)
+            .limit(limit)
+            .call()
+            .get("_embedded", {})
+            .get("records", [])
+        )
+        result = []
+        for tx in records:
+            result.append(
+                {
+                    "hash": tx.get("hash", ""),
+                    "created_at": tx.get("created_at", ""),
+                    "successful": tx.get("successful", False),
+                    "fee_charged": tx.get("fee_charged", "0"),
+                    "operation_count": tx.get("operation_count", 0),
+                    "memo": tx.get("memo", ""),
+                }
+            )
+        return result
+
     def send_payment(
         self, 
         source_secret: str, 
