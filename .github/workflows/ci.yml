@@ -1,0 +1,66 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ master, main, develop ]
+  pull_request:
+    branches: [ master, main, develop ]
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12']
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Run tests
+        run: |
+          pytest tests/ -v
+      
+      - name: Test coverage
+        if: matrix.python-version == '3.12'
+        run: |
+          pip install pytest-cov
+          pytest tests/ --cov=stellar_agent --cov-report=xml --cov-report=term
+
+  lint:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install linting tools
+        run: |
+          pip install pylint black
+      
+      - name: Run Black
+        run: |
+          black --check stellar_agent/ tests/
+        continue-on-error: true
+      
+      - name: Run Pylint
+        run: |
+          pylint stellar_agent/ --disable=all --enable=E,F
+        continue-on-error: true
