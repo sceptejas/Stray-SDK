@@ -1,7 +1,9 @@
 """Command-line interface for Stellar Agent."""
+import sys
 from .client import StellarClient
 from .config import config
 from .utils.validators import is_valid_stellar_address, is_valid_amount
+from .history import display_transaction_history, display_transaction_summary
 
 def prompt_and_send():
     """Interactive CLI for sending Stellar payments."""
@@ -17,10 +19,26 @@ def prompt_and_send():
     
     while True:
         print("\n--- Stellar Agent ---")
-        destination = input("Enter destination public key (or type 'exit' to quit): ").strip()
+        print("Commands: 'send' | 'history' | 'exit'")
+        command = input("Enter command: ").strip().lower()
         
-        if destination.lower() == "exit":
+        if command == "exit":
             break
+        
+        elif command == "history":
+            view_transaction_history(client)
+            continue
+        
+        elif command != "send":
+            print("❌ Invalid command. Use 'send', 'history', or 'exit'")
+            continue
+        
+        # Send payment flow
+        destination = input("Enter destination public key: ").strip()
+        
+        if not destination:
+            print("❌ Destination cannot be empty")
+            continue
         
         # Validate destination address
         if not is_valid_stellar_address(destination):
@@ -66,6 +84,52 @@ def prompt_and_send():
         except Exception as e:
             print(f"❌ Unexpected error: {e}")
             print("💡 Please check your network connectivity and configuration.")
+
+def view_transaction_history(client):
+    """View transaction history for an account."""
+    try:
+        # Get account to view history for
+        print("\n📜 Transaction History Viewer")
+        account_choice = input("View history for: (1) Your account (2) Another account: ").strip()
+        
+        if account_choice == "1":
+            account_id = config.get_source_public_key()
+            print(f"Fetching history for your account: {account_id[:8]}...{account_id[-8:]}")
+        elif account_choice == "2":
+            account_id = input("Enter account public key: ").strip()
+            if not is_valid_stellar_address(account_id):
+                print("❌ Invalid Stellar address.")
+                return
+        else:
+            print("❌ Invalid choice.")
+            return
+        
+        # Get number of transactions to fetch
+        limit_input = input("Number of transactions to fetch (default 10, max 50): ").strip()
+        try:
+            limit = int(limit_input) if limit_input else 10
+            limit = min(max(1, limit), 50)  # Clamp between 1 and 50
+        except ValueError:
+            limit = 10
+        
+        # Fetch and display history
+        print(f"\n⏳ Fetching last {limit} transactions...")
+        transactions = client.get_transaction_history(account_id, limit=limit)
+        
+        if transactions:
+            display_transaction_history(transactions, account_id)
+            
+            # Ask if user wants summary
+            show_summary = input("\nShow summary statistics? (y/n): ").strip().lower()
+            if show_summary == 'y':
+                display_transaction_summary(transactions, account_id)
+        else:
+            print("\n📭 No transactions found for this account.")
+            
+    except RuntimeError as e:
+        print(f"❌ Error fetching history: {e}")
+    except Exception as e:
+        print(f"❌ Unexpected error: {e}")
 
 def run():
     """Entry point for the CLI."""

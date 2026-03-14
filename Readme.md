@@ -11,6 +11,8 @@ We welcome meaningful contributions that improve the project's functionality, do
 ## Features
 
 - 🚀 Simple interactive CLI for sending Stellar payments
+- 📜 Transaction history viewer with detailed information
+- 📊 Transaction summary statistics
 - ✅ Input validation for addresses and amounts
 - 🔒 Environment-based configuration for security
 - 🧪 Testnet support out of the box
@@ -58,14 +60,55 @@ pip install -e .
 stellar-agent
 ```
 
-Follow the prompts to send payments:
+Follow the prompts to send payments or view history:
 ```
 --- Stellar Agent ---
-Enter destination public key (or type 'exit' to quit): GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H
+Commands: 'send' | 'history' | 'exit'
+Enter command: send
+Enter destination public key: GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H
 Enter amount to send (in XLM): 10
 Sending 10 XLM to GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H...
 ✅ Transaction Successful!
 Transaction Hash: abc123...
+```
+
+### View Transaction History
+
+```
+--- Stellar Agent ---
+Commands: 'send' | 'history' | 'exit'
+Enter command: history
+
+📜 Transaction History Viewer
+View history for: (1) Your account (2) Another account: 1
+Number of transactions to fetch (default 10, max 50): 5
+
+⏳ Fetching last 5 transactions...
+
+📜 Transaction History for GBRPYHIL...7QC7OX2H
+====================================================================================================
+
+✅ Transaction #1
+   Hash: abc123def456...xyz789
+   Time: 2024-01-15 10:30:00 UTC
+   Ledger: 12345
+   Fee: 0.0000100 XLM
+   Operations (1):
+      📤 Sent: 10.5 XLM
+      To: GDQP2KPQ...SQHG4W37
+   ------------------------------------------------------------------------------------------------
+
+Show summary statistics? (y/n): y
+
+📊 Transaction Summary
+==================================================
+Total Transactions: 5
+Payment Operations: 5
+Total Sent: 52.5000000 XLM
+Total Received: 100.0000000 XLM
+Total Fees Paid: 0.0000500 XLM
+Net Change: 47.4999500 XLM
+==================================================
 ```
 
 ## Development
