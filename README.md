@@ -1,4 +1,4 @@
-# Stray-SDK v1.1
+# Stellar Agent
 
 A lightweight Python CLI tool for sending XLM payments on the Stellar blockchain network.
 
@@ -188,4 +188,4 @@ MIT License
 
 ## Disclaimer
 
-This tool is for educational purposes. Always test on testnet before using on mainnet.`
+This tool is for educational purposes. Always test on testnet before using on mainnet.
