@@ -1,6 +1,7 @@
-"""Tests for StellarClient — balance and transaction history methods."""
+"""Tests for StellarClient — balance, transaction history, and payment methods."""
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, Mock, patch
+from decimal import Decimal
 from stellar_agent.client import StellarClient
 
 
@@ -11,6 +12,7 @@ from stellar_agent.client import StellarClient
 VALID_ADDRESS = "GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H"
 
 MOCK_ACCOUNT_INFO = {
+    "id": VALID_ADDRESS,
     "balances": [
         {
             "asset_type": "native",
@@ -46,6 +48,67 @@ MOCK_TRANSACTIONS = {
         ]
     }
 }
+
+
+@pytest.fixture
+def mock_config():
+    with patch('stellar_agent.client.config') as mock_conf:
+        mock_conf.horizon_url = 'https://horizon-testnet.stellar.org'
+        mock_conf.network_passphrase = 'Test SDF Network ; September 2015'
+        mock_conf.balance_check_enabled = False
+        mock_conf.minimum_balance_xlm = 1.0
+        yield mock_conf
+
+
+# ---------------------------------------------------------------------------
+# Initialization
+# ---------------------------------------------------------------------------
+
+class TestStellarClientInit:
+    """Tests for StellarClient initialization."""
+
+    def test_stellar_client_init(self, mock_config):
+        with patch('stellar_agent.client.Server') as mock_server:
+            client = StellarClient()
+            mock_server.assert_called_once_with('https://horizon-testnet.stellar.org')
+            assert client.server == mock_server.return_value
+
+
+# ---------------------------------------------------------------------------
+# get_account_info
+# ---------------------------------------------------------------------------
+
+class TestGetAccountInfo:
+    """Tests for StellarClient.get_account_info()."""
+
+    def test_returns_account_info(self, mock_config):
+        with patch('stellar_agent.client.Server') as mock_server_class:
+            mock_server = mock_server_class.return_value
+            mock_accounts = Mock()
+            mock_account_id = Mock()
+            mock_server.accounts.return_value = mock_accounts
+            mock_accounts.account_id.return_value = mock_account_id
+            mock_account_id.call.return_value = MOCK_ACCOUNT_INFO
+
+            client = StellarClient()
+            response = client.get_account_info(VALID_ADDRESS)
+
+            mock_accounts.account_id.assert_called_once_with(VALID_ADDRESS)
+            assert response == MOCK_ACCOUNT_INFO
+
+    def test_raises_on_not_found(self, mock_config):
+        from stellar_sdk.exceptions import NotFoundError
+        with patch('stellar_agent.client.Server') as mock_server_class:
+            mock_server = mock_server_class.return_value
+            mock_accounts = Mock()
+            mock_account_id = Mock()
+            mock_server.accounts.return_value = mock_accounts
+            mock_accounts.account_id.return_value = mock_account_id
+            mock_account_id.call.side_effect = NotFoundError(Mock())
+
+            client = StellarClient()
+            with pytest.raises(RuntimeError, match="not found"):
+                client.get_account_info(VALID_ADDRESS)
 
 
 # ---------------------------------------------------------------------------
@@ -89,6 +152,35 @@ class TestGetBalance:
 
 
 # ---------------------------------------------------------------------------
+# get_account_balance
+# ---------------------------------------------------------------------------
+
+class TestGetAccountBalance:
+    """Tests for StellarClient.get_account_balance()."""
+
+    def _make_client(self, account_info: dict = None, raise_error: bool = False) -> StellarClient:
+        with patch("stellar_agent.client.Server"):
+            client = StellarClient()
+        if raise_error:
+            client.get_account_info = MagicMock(side_effect=RuntimeError("Not found"))
+        else:
+            client.get_account_info = MagicMock(return_value=account_info or MOCK_ACCOUNT_INFO)
+        return client
+
+    def test_returns_xlm_balance_decimal(self):
+        client = self._make_client()
+        balance, exists = client.get_account_balance(VALID_ADDRESS)
+        assert exists is True
+        assert balance == Decimal("95.0000000")
+
+    def test_returns_zero_when_not_found(self):
+        client = self._make_client(raise_error=True)
+        balance, exists = client.get_account_balance(VALID_ADDRESS)
+        assert exists is False
+        assert balance == Decimal('0')
+
+
+# ---------------------------------------------------------------------------
 # get_transaction_history
 # ---------------------------------------------------------------------------
 
@@ -100,7 +192,6 @@ class TestGetTransactionHistory:
             mock_server = MagicMock()
             mock_server_cls.return_value = mock_server
 
-            # Build a chainable mock: server.transactions().for_account().order().limit().call()
             mock_chain = MagicMock()
             mock_chain.call.return_value = tx_data
             mock_server.transactions.return_value.for_account.return_value \
@@ -129,7 +220,6 @@ class TestGetTransactionHistory:
         assert txs[1]["successful"] is False
 
     def test_limit_clamped_to_1_minimum(self):
-        """Limit below 1 should be treated as 1."""
         with patch("stellar_agent.client.Server") as mock_server_cls:
             mock_server = MagicMock()
             mock_server_cls.return_value = mock_server
@@ -142,12 +232,10 @@ class TestGetTransactionHistory:
             client.server = mock_server
             client.get_transaction_history(VALID_ADDRESS, limit=0)
 
-            # limit() should have been called with 1, not 0
             mock_server.transactions.return_value.for_account.return_value \
                 .order.return_value.limit.assert_called_with(1)
 
     def test_limit_clamped_to_200_maximum(self):
-        """Limit above 200 should be clamped to 200."""
         with patch("stellar_agent.client.Server") as mock_server_cls:
             mock_server = MagicMock()
             mock_server_cls.return_value = mock_server

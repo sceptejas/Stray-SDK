@@ -31,13 +31,34 @@ def cmd_send_payment(client: StellarClient) -> None:
         print("❌ Invalid amount. Please enter a number.")
         return
 
+    # Check balance before attempting payment (if enabled)
+    if config.balance_check_enabled:
+        try:
+            source_public_key = config.get_source_public_key()
+            sufficient, current_balance, error_msg = client.check_sufficient_balance(source_public_key, amount)
+
+            if not sufficient:
+                print(f"❌ {error_msg}")
+                print("💡 Please check: account funding, network connectivity, or reduce payment amount.")
+                return
+            else:
+                print(f"💰 Current balance: {current_balance} XLM (sufficient for payment)")
+        except Exception as e:
+            print(f"⚠️  Warning: Could not verify balance: {e}")
+            print("Proceeding with payment attempt...")
+
     print(f"Sending {amount} XLM to {destination}...")
     try:
         response = client.send_payment(config.source_secret, destination, amount)
         print("✅ Transaction Successful!")
         print("Transaction Hash:", response["hash"])
+        if "ledger" in response:
+            print("Ledger:", response["ledger"])
+    except RuntimeError as e:
+        print(f"❌ Transaction Failed: {e}")
     except Exception as e:
-        print("❌ Transaction Failed:", str(e))
+        print(f"❌ Unexpected error: {e}")
+        print("💡 Please check your network connectivity and configuration.")
 
 
 def cmd_check_balance(client: StellarClient) -> None:

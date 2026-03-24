@@ -1,4 +1,4 @@
-stellar-sdk>=9.0.0
-requests>=2.31.0
-python-dotenv>=1.0.0
-pytest>=7.0.0
+stellar-sdk==13.2.1
+python-dotenv==1.2.1
+pytest==9.0.2
+setuptools==75.0.0
