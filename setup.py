@@ -1,17 +1,17 @@
-"""Setup configuration for Stellar Agent."""
+"""Setup configuration for Stray SDK."""
 from setuptools import setup, find_packages
 
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setup(
-    name="stellar-agent",
+    name="stray-sdk",
     version="0.1.0",
-    author="Your Name",
+    author="sceptejas",
     description="A CLI tool for Stellar blockchain payments",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/stellar-agent",
+    url="https://github.com/sceptejas/Stray-SDK",
     packages=find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",
