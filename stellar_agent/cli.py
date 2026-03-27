@@ -3,6 +3,7 @@ from .client import StellarClient
 from .config import config
 from .utils.validators import is_valid_stellar_address, is_valid_amount
 from .utils.history import TransactionHistory, format_record
+from .utils.batch import parse_batch_csv, print_batch_summary
 
 _history = TransactionHistory()
 
@@ -18,6 +19,52 @@ def show_history() -> None:
         print(format_record(record, i))
         print()
 
+
+def run_batch(client: StellarClient) -> None:
+    """Interactive flow for processing a batch CSV payment file."""
+    file_path = input("Enter path to batch CSV file: ").strip()
+    if not file_path:
+        print("❌ No file path provided.")
+        return
+
+    try:
+        entries, parse_errors = parse_batch_csv(file_path)
+    except (FileNotFoundError, ValueError) as e:
+        print(f"❌ {e}")
+        return
+
+    if parse_errors:
+        print(f"\n⚠️  {len(parse_errors)} row(s) skipped due to validation errors:")
+        for err in parse_errors:
+            print(f"   {err}")
+
+    if not entries:
+        print("❌ No valid entries found in the batch file.")
+        return
+
+    stop_on_error_input = input(
+        f"\nFound {len(entries)} valid payment(s). Stop on first error? [y/N]: "
+    ).strip().lower()
+    stop_on_error = stop_on_error_input == "y"
+
+    print(f"\nProcessing {len(entries)} payment(s)...")
+    summary = client.send_batch_payments(
+        source_secret=config.source_secret,
+        entries=entries,
+        stop_on_error=stop_on_error,
+    )
+
+    # Print per-payment progress
+    for result in summary.results:
+        dst = result.entry.destination
+        dst_short = f"{dst[:6]}...{dst[-6:]}" if len(dst) > 12 else dst
+        if result.success:
+            print(f"  ✅ {dst_short} | {result.entry.amount} XLM | {result.tx_hash[:12]}...")
+        else:
+            print(f"  ❌ {dst_short} | {result.entry.amount} XLM | {result.error}")
+
+    print_batch_summary(summary)
+
 def prompt_and_send():
     """Interactive CLI for sending Stellar payments."""
     client = StellarClient()
@@ -32,7 +79,7 @@ def prompt_and_send():
     
     while True:
         print("\n--- Stellar Agent ---")
-        print("Commands: send | history | exit")
+        print("Commands: send | batch | history | exit")
         destination = input("Enter destination public key (or command): ").strip()
 
         if destination.lower() == "exit":
@@ -40,6 +87,10 @@ def prompt_and_send():
 
         if destination.lower() == "history":
             show_history()
+            continue
+
+        if destination.lower() == "batch":
+            run_batch(client)
             continue
         
         # Validate destination address

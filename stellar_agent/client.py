@@ -2,10 +2,11 @@
 from stellar_sdk import Server, Keypair, TransactionBuilder, Asset
 from stellar_sdk.operation import Payment
 from stellar_sdk.exceptions import NotFoundError, BadRequestError
-from typing import Dict, Any, Tuple, Optional
+from typing import Dict, Any, List, Tuple, Optional
 from decimal import Decimal
 from .config import config
 from .utils.history import TransactionHistory
+from .utils.batch import BatchEntry, BatchPaymentResult, BatchSummary
 
 _history = TransactionHistory()
 
@@ -180,3 +181,50 @@ class StellarClient:
             if isinstance(e, RuntimeError):
                 raise
             raise RuntimeError(f"Payment operation failed: {e}")
+
+    def send_batch_payments(
+        self,
+        source_secret: str,
+        entries: List[BatchEntry],
+        stop_on_error: bool = False,
+    ) -> BatchSummary:
+        """
+        Send XLM payments to multiple destinations from a list of BatchEntry objects.
+
+        Args:
+            source_secret: Secret key of the source account.
+            entries: List of BatchEntry items (destination, amount, memo).
+            stop_on_error: If True, abort remaining payments on first failure.
+
+        Returns:
+            BatchSummary with per-payment results and aggregate statistics.
+        """
+        summary = BatchSummary()
+
+        for entry in entries:
+            try:
+                response = self.send_payment(
+                    source_secret=source_secret,
+                    destination_public=entry.destination,
+                    amount=entry.amount,
+                    memo=entry.memo,
+                )
+                summary.results.append(
+                    BatchPaymentResult(
+                        entry=entry,
+                        success=True,
+                        tx_hash=response.get("hash", ""),
+                    )
+                )
+            except RuntimeError as e:
+                summary.results.append(
+                    BatchPaymentResult(
+                        entry=entry,
+                        success=False,
+                        error=str(e),
+                    )
+                )
+                if stop_on_error:
+                    break
+
+        return summary
