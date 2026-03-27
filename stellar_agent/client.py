@@ -2,9 +2,12 @@
 from stellar_sdk import Server, Keypair, TransactionBuilder, Asset
 from stellar_sdk.operation import Payment
 from stellar_sdk.exceptions import NotFoundError, BadRequestError
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, Tuple, Optional
 from decimal import Decimal
 from .config import config
+from .utils.history import TransactionHistory
+
+_history = TransactionHistory()
 
 class StellarClient:
     """Client for interacting with Stellar blockchain."""
@@ -86,10 +89,11 @@ class StellarClient:
         return True, balance, ""
     
     def send_payment(
-        self, 
-        source_secret: str, 
-        destination_public: str, 
-        amount: float
+        self,
+        source_secret: str,
+        destination_public: str,
+        amount: float,
+        memo: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Send XLM payment to a destination address.
@@ -143,9 +147,22 @@ class StellarClient:
 
             # Sign and submit transaction
             transaction.sign(source_keypair)
-            
+
             try:
                 response = self.server.submit_transaction(transaction)
+
+                # Persist to local transaction history
+                network_label = "mainnet" if "mainnet" in config.network_passphrase.lower() else "testnet"
+                _history.record(
+                    source=source_public_key,
+                    destination=destination_public,
+                    amount=amount,
+                    tx_hash=response.get("hash", ""),
+                    ledger=response.get("ledger"),
+                    network=network_label,
+                    memo=memo,
+                )
+
                 return response
             except BadRequestError as e:
                 # Parse common Stellar errors

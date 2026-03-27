@@ -2,6 +2,21 @@
 from .client import StellarClient
 from .config import config
 from .utils.validators import is_valid_stellar_address, is_valid_amount
+from .utils.history import TransactionHistory, format_record
+
+_history = TransactionHistory()
+
+
+def show_history() -> None:
+    """Print past transactions to stdout."""
+    records = _history.get_all()
+    if not records:
+        print("\nNo transaction history found.")
+        return
+    print(f"\n--- Transaction History ({len(records)} record(s)) ---")
+    for i, record in enumerate(records, start=1):
+        print(format_record(record, i))
+        print()
 
 def prompt_and_send():
     """Interactive CLI for sending Stellar payments."""
@@ -17,10 +32,15 @@ def prompt_and_send():
     
     while True:
         print("\n--- Stellar Agent ---")
-        destination = input("Enter destination public key (or type 'exit' to quit): ").strip()
-        
+        print("Commands: send | history | exit")
+        destination = input("Enter destination public key (or command): ").strip()
+
         if destination.lower() == "exit":
             break
+
+        if destination.lower() == "history":
+            show_history()
+            continue
         
         # Validate destination address
         if not is_valid_stellar_address(destination):
