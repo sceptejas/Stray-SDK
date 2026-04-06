@@ -8,6 +8,8 @@ def mock_config():
     with patch('stellar_agent.client.config') as mock_conf:
         mock_conf.horizon_url = 'https://horizon-testnet.stellar.org'
         mock_conf.network_passphrase = 'Test SDF Network ; September 2015'
+        mock_conf.balance_check_enabled = False
+        mock_conf.minimum_balance_xlm = 1.0
         yield mock_conf
 
 def test_stellar_client_init(mock_config):
@@ -106,3 +108,41 @@ def test_send_payment(
         mock_server.submit_transaction.assert_called_once_with(mock_transaction)
         
         assert response == expected_response
+
+
+@pytest.fixture
+def client(mock_config):
+    """Create a StellarClient with mocked config (balance check disabled)."""
+    mock_config.balance_check_enabled = False
+    with patch('stellar_agent.client.Server'):
+        return StellarClient()
+
+
+def test_send_payment_rejects_invalid_decimal_amount(client):
+    """Regression test: decimal.ConversionSyntax bug fix."""
+    with pytest.raises((ValueError, RuntimeError)):
+        client.send_payment(
+            source_secret="SCZANGBA5OISN7QDPCVVZLHNO5YNQE3YQ4JKXM3A6FX6T2MBW7YW4KR",
+            destination_public="GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN7",
+            amount=float('nan')
+        )
+
+
+def test_send_payment_rejects_zero_amount(client):
+    """Amount must be positive."""
+    with pytest.raises((ValueError, RuntimeError)):
+        client.send_payment(
+            source_secret="SCZANGBA5OISN7QDPCVVZLHNO5YNQE3YQ4JKXM3A6FX6T2MBW7YW4KR",
+            destination_public="GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN7",
+            amount=0
+        )
+
+
+def test_send_payment_rejects_negative_amount(client):
+    """Negative amounts must be rejected."""
+    with pytest.raises((ValueError, RuntimeError)):
+        client.send_payment(
+            source_secret="SCZANGBA5OISN7QDPCVVZLHNO5YNQE3YQ4JKXM3A6FX6T2MBW7YW4KR",
+            destination_public="GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN7",
+            amount=-5.0
+        )

@@ -3,7 +3,7 @@ from stellar_sdk import Server, Keypair, TransactionBuilder, Asset
 from stellar_sdk.operation import Payment
 from stellar_sdk.exceptions import NotFoundError, BadRequestError
 from typing import Dict, Any, Tuple
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from .config import config
 
 class StellarClient:
@@ -70,7 +70,10 @@ class StellarClient:
             return False, balance, "Source account not found or not funded"
         
         # Calculate total cost: payment + estimated fee + minimum balance reserve
-        payment_amount = Decimal(str(amount))
+        try:
+            payment_amount = Decimal(str(amount))
+        except InvalidOperation:
+            return False, Decimal('0'), f"Invalid amount: {amount!r}"
         estimated_fee = Decimal('0.00001')  # Base fee
         minimum_reserve = Decimal(str(config.minimum_balance_xlm))
         
@@ -105,13 +108,31 @@ class StellarClient:
         Raises:
             RuntimeError: If balance is insufficient, network issues, or transaction fails
         """
+        # Validate amount before any other logic
+        try:
+            decimal_amount = Decimal(str(amount))
+        except (InvalidOperation, ValueError):
+            raise ValueError(
+                f"Invalid payment amount: {amount!r}. "
+                "Amount must be a valid positive number."
+            )
+        if decimal_amount.is_nan() or decimal_amount.is_infinite():
+            raise ValueError(
+                f"Invalid payment amount: {amount!r}. "
+                "Amount must be a valid positive number."
+            )
+        if decimal_amount <= 0:
+            raise ValueError(
+                f"Payment amount must be positive, got {decimal_amount}"
+            )
+
         try:
             source_keypair = Keypair.from_secret(source_secret)
             source_public_key = source_keypair.public_key
             
             # Balance check if enabled
             if config.balance_check_enabled:
-                sufficient, balance, error_msg = self.check_sufficient_balance(source_public_key, amount)
+                sufficient, balance, error_msg = self.check_sufficient_balance(source_public_key, float(decimal_amount))
                 if not sufficient:
                     raise RuntimeError(f"Balance check failed: {error_msg}")
             
@@ -134,7 +155,7 @@ class StellarClient:
                     Payment(
                         destination=destination_public,
                         asset=Asset.native(),
-                        amount=str(amount)
+                        amount=str(decimal_amount)
                     )
                 )
                 .set_timeout(30)
