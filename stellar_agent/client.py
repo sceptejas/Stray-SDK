@@ -5,12 +5,14 @@ from stellar_sdk.exceptions import NotFoundError, BadRequestError
 from typing import Dict, Any, Tuple
 from decimal import Decimal
 from .config import config
+from .multisig import MultisigManager
 
 class StellarClient:
     """Client for interacting with Stellar blockchain."""
     
     def __init__(self):
         self.server = Server(config.horizon_url)
+        self.multisig = MultisigManager(config.horizon_url, config.network_passphrase)
     
     def get_account_info(self, account_id: str) -> Dict[str, Any]:
         """
@@ -89,7 +91,8 @@ class StellarClient:
         self, 
         source_secret: str, 
         destination_public: str, 
-        amount: float
+        amount: float,
+        submit: bool = True
     ) -> Dict[str, Any]:
         """
         Send XLM payment to a destination address.
@@ -144,6 +147,12 @@ class StellarClient:
             # Sign and submit transaction
             transaction.sign(source_keypair)
             
+            if not submit:
+                return {
+                    "status": "signed",
+                    "tx_xdr": transaction.to_xdr()
+                }
+
             try:
                 response = self.server.submit_transaction(transaction)
                 return response

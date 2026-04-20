@@ -14,6 +14,7 @@ We welcome meaningful contributions that improve the project's functionality, do
 - ✅ Input validation for addresses and amounts
 - 🔒 Environment-based configuration for security
 - 🧪 Testnet support out of the box
+- 🔑 **Multi-signature support** (Collect, Merge, and Submit signatures)
 
 ## Installation
 
