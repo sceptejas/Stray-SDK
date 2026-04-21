@@ -1,10 +1,11 @@
 """Stellar blockchain client for payment operations."""
 from stellar_sdk import Server, Keypair, TransactionBuilder, Asset
-from stellar_sdk.operation import Payment
+from stellar_sdk.operation import Payment, CreateAccount
 from stellar_sdk.exceptions import NotFoundError, BadRequestError
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, Tuple, List, Optional
 from decimal import Decimal
 from .config import config
+from .utils.error_handlers import StellarErrorHandler
 
 class StellarClient:
     """Client for interacting with Stellar blockchain."""
@@ -29,9 +30,13 @@ class StellarClient:
             response = self.server.accounts().account_id(account_id).call()
             return response
         except NotFoundError:
-            raise RuntimeError(f"Account {account_id} not found on the Stellar network. Check that the account is funded and the network URL is correct.")
+            error_msg = StellarErrorHandler.handle_stellar_error(
+                NotFoundError(), "account information fetch"
+            )
+            raise RuntimeError(error_msg)
         except Exception as e:
-            raise RuntimeError(f"Failed to fetch account information: {e}. Check your network connectivity and Horizon URL configuration.")
+            error_msg = StellarErrorHandler.handle_stellar_error(e, "account information fetch")
+            raise RuntimeError(error_msg)
     
     def get_account_balance(self, account_id: str) -> Tuple[Decimal, bool]:
         """
@@ -148,18 +153,160 @@ class StellarClient:
                 response = self.server.submit_transaction(transaction)
                 return response
             except BadRequestError as e:
-                # Parse common Stellar errors
-                error_detail = str(e)
-                if "insufficient balance" in error_detail.lower():
-                    raise RuntimeError("Transaction failed: Insufficient balance for payment and fees.")
-                elif "destination account does not exist" in error_detail.lower():
-                    raise RuntimeError("Transaction failed: Destination account does not exist. The recipient must have an active Stellar account.")
-                else:
-                    raise RuntimeError(f"Transaction failed: {error_detail}. Check transaction parameters and try again.")
+                error_msg = StellarErrorHandler.handle_stellar_error(e, "payment transaction")
+                raise RuntimeError(error_msg)
             except Exception as e:
-                raise RuntimeError(f"Transaction submission failed: {e}. Check network connectivity and try again.")
+                error_msg = StellarErrorHandler.handle_stellar_error(e, "payment transaction")
+                raise RuntimeError(error_msg)
                 
         except Exception as e:
             if isinstance(e, RuntimeError):
                 raise
             raise RuntimeError(f"Payment operation failed: {e}")
+    
+    def get_transaction_history(self, account_id: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Get transaction history for an account.
+        
+        Args:
+            account_id: Public key of the account
+            limit: Maximum number of transactions to retrieve (default: 10)
+            
+        Returns:
+            List of transaction dictionaries
+            
+        Raises:
+            RuntimeError: If account is not found or network issues occur
+        """
+        try:
+            transactions = self.server.transactions().for_account(account_id).limit(limit).call()
+            return transactions.get('_embedded', {}).get('records', [])
+        except NotFoundError:
+            raise RuntimeError(f"Account {account_id} not found on the Stellar network.")
+        except Exception as e:
+            raise RuntimeError(f"Failed to fetch transaction history: {e}")
+    
+    def get_transaction_status(self, transaction_hash: str) -> Dict[str, Any]:
+        """
+        Get the status and details of a specific transaction.
+        
+        Args:
+            transaction_hash: Hash of the transaction to check
+            
+        Returns:
+            Transaction details dictionary
+            
+        Raises:
+            RuntimeError: If transaction is not found or network issues occur
+        """
+        try:
+            transaction = self.server.transactions().transaction(transaction_hash).call()
+            return transaction
+        except NotFoundError:
+            raise RuntimeError(f"Transaction {transaction_hash} not found on the Stellar network.")
+        except Exception as e:
+            raise RuntimeError(f"Failed to fetch transaction status: {e}")
+    
+    def create_account(self, source_secret: str, starting_balance: float) -> Tuple[str, str]:
+        """
+        Create a new Stellar account and fund it with XLM.
+        
+        Args:
+            source_secret: Secret key of the funding account
+            starting_balance: Amount of XLM to send to the new account
+            
+        Returns:
+            Tuple of (new_public_key, new_secret_key)
+            
+        Raises:
+            RuntimeError: If account creation fails
+        """
+        try:
+            # Generate new keypair for the new account
+            new_keypair = Keypair.random()
+            new_public_key = new_keypair.public_key
+            new_secret_key = new_keypair.secret
+            
+            # Create and fund the new account
+            source_keypair = Keypair.from_secret(source_secret)
+            source_public_key = source_keypair.public_key
+            
+            # Load source account
+            source_account = self.server.load_account(source_public_key)
+            
+            # Build transaction to create account
+            transaction = (
+                TransactionBuilder(
+                    source_account=source_account,
+                    network_passphrase=config.network_passphrase,
+                    base_fee=100,
+                )
+                .append_operation(
+                    CreateAccount(
+                        destination=new_public_key,
+                        starting_balance=str(starting_balance)
+                    )
+                )
+                .set_timeout(30)
+                .build()
+            )
+            
+            # Sign and submit transaction
+            transaction.sign(source_keypair)
+            response = self.server.submit_transaction(transaction)
+            
+            return new_public_key, new_secret_key
+            
+        except Exception as e:
+            if isinstance(e, RuntimeError):
+                raise
+            raise RuntimeError(f"Account creation failed: {e}")
+    
+    def get_account_balance_detailed(self, account_id: str) -> Dict[str, Any]:
+        """
+        Get detailed balance information for an account.
+        
+        Args:
+            account_id: Public key of the account
+            
+        Returns:
+            Dictionary with detailed balance information
+            
+        Raises:
+            RuntimeError: If account is not found or network issues occur
+        """
+        try:
+            account_info = self.get_account_info(account_id)
+            balances = []
+            
+            for balance in account_info.get('balances', []):
+                balance_info = {
+                    'asset_type': balance.get('asset_type'),
+                    'asset_code': balance.get('asset_code', 'XLM'),
+                    'balance': balance.get('balance'),
+                    'limit': balance.get('limit'),
+                    'buying_liabilities': balance.get('buying_liabilities', '0.0000000'),
+                    'selling_liabilities': balance.get('selling_liabilities', '0.0000000')
+                }
+                
+                # Calculate available balance
+                total = Decimal(balance.get('balance', '0'))
+                buying_liabilities = Decimal(balance.get('buying_liabilities', '0'))
+                selling_liabilities = Decimal(balance.get('selling_liabilities', '0'))
+                balance_info['available'] = str(total - buying_liabilities - selling_liabilities)
+                
+                balances.append(balance_info)
+            
+            return {
+                'account_id': account_id,
+                'balances': balances,
+                'sequence': account_info.get('sequence'),
+                'num_subentries': account_info.get('num_subentries', 0),
+                'thresholds': account_info.get('thresholds', {}),
+                'flags': account_info.get('flags', {})
+            }
+            
+        except Exception as e:
+            if isinstance(e, RuntimeError):
+                raise
+            raise RuntimeError(f"Failed to get detailed balance: {e}")

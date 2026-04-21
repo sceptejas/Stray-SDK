@@ -6,9 +6,9 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="stellar-agent",
-    version="0.1.0",
-    author="Your Name",
-    description="A CLI tool for Stellar blockchain payments",
+    version="1.2.0",
+    author="Stellar Agent Contributors",
+    description="A comprehensive Python CLI tool for Stellar blockchain operations including payments, account management, and transaction monitoring.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/yourusername/stellar-agent",

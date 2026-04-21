@@ -1,6 +1,6 @@
-# Stray-SDK v1.1
+# Stray-SDK v1.2
 
-A lightweight Python CLI tool for sending XLM payments on the Stellar blockchain network.
+A comprehensive Python CLI tool for Stellar blockchain operations including payments, account management, and transaction monitoring.
 
 ## 🌟 Stellar Open Source Builder Program
 
@@ -10,10 +10,15 @@ We welcome meaningful contributions that improve the project's functionality, do
 
 ## Features
 
-- 🚀 Simple interactive CLI for sending Stellar payments
-- ✅ Input validation for addresses and amounts
-- 🔒 Environment-based configuration for security
-- 🧪 Testnet support out of the box
+- Simple interactive CLI with menu-driven interface
+- Send XLM payments with validation and balance checking
+- Create and fund new Stellar accounts
+- View transaction history and account details
+- Check transaction status and account balances
+- Enhanced error handling with recovery suggestions
+- Input validation for addresses and amounts
+- Environment-based configuration for security
+- Testnet support out of the box
 
 ## Installation
 
@@ -58,14 +63,46 @@ pip install -e .
 stellar-agent
 ```
 
-Follow the prompts to send payments:
+The CLI provides a menu-driven interface with the following options:
+
 ```
---- Stellar Agent ---
-Enter destination public key (or type 'exit' to quit): GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H
-Enter amount to send (in XLM): 10
-Sending 10 XLM to GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H...
-✅ Transaction Successful!
-Transaction Hash: abc123...
+==================================================
+ STELLAR AGENT - MAIN MENU 
+==================================================
+1.  Send Payment
+2.  View Transaction History
+3.  Create New Account
+4.  Check Account Balance
+5.  Check Transaction Status
+6.  Account Details
+7.  Exit
+==================================================
+```
+
+### Key Features:
+
+1. **Send Payments**: Send XLM to any Stellar address with balance validation
+2. **Transaction History**: View recent transactions for any account
+3. **Create Accounts**: Generate and fund new Stellar accounts
+4. **Balance Checking**: Check current balance and detailed account information
+5. **Transaction Status**: Verify transaction success and get detailed information
+6. **Account Details**: View comprehensive account information including thresholds and flags
+
+### Example Usage:
+
+```bash
+python main.py
+
+# Select option 1 to send payment
+# Enter destination: GDXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+# Enter amount: 10.5
+# Transaction successful with hash: abc123...
+
+# Select option 3 to create account
+# Enter starting balance: 2.0
+# New account created:
+# Public Key: GDYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY
+# Secret Key: SZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ
 ```
 
 ## Development
