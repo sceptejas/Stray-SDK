@@ -8,6 +8,11 @@ def mock_config():
     with patch('stellar_agent.client.config') as mock_conf:
         mock_conf.horizon_url = 'https://horizon-testnet.stellar.org'
         mock_conf.network_passphrase = 'Test SDF Network ; September 2015'
+        # Balance check has its own dedicated tests in test_validators.py;
+        # disable it here so send_payment tests exercise the transaction
+        # builder path with a clean mock surface.
+        mock_conf.balance_check_enabled = False
+        mock_conf.minimum_balance_xlm = 1.0
         yield mock_conf
 
 def test_stellar_client_init(mock_config):

@@ -53,37 +53,112 @@ class StellarClient:
         except RuntimeError:
             return Decimal('0'), False
     
+    # Stellar protocol base reserve per sub-entry. Two base reserves are
+    # required for the account itself, plus one per sub-entry (trustlines,
+    # offers, signers, data entries, etc.). See:
+    # https://developers.stellar.org/docs/learn/fundamentals/lumens#minimum-balance
+    _BASE_RESERVE_XLM = Decimal('0.5')
+
+    def _compute_protocol_reserve(self, account_info: Dict[str, Any]) -> Decimal:
+        """Return the protocol-required minimum XLM balance for an account.
+
+        ``(2 + subentry_count) * base_reserve``. Falls back to the configured
+        ``minimum_balance_xlm`` when ``subentry_count`` is missing from the
+        Horizon payload.
+        """
+        subentry_count = account_info.get('subentry_count')
+        if subentry_count is None:
+            return Decimal(str(config.minimum_balance_xlm))
+        return (Decimal(2) + Decimal(int(subentry_count))) * self._BASE_RESERVE_XLM
+
+    def _native_balance_entry(self, account_info: Dict[str, Any]) -> Dict[str, Any]:
+        """Return the native (XLM) balance entry, or an empty dict if absent."""
+        for balance in account_info.get('balances', []):
+            if balance.get('asset_type') == 'native':
+                return balance
+        return {}
+
+    def get_spendable_balance(self, account_id: str) -> Tuple[Decimal, bool]:
+        """Return the XLM balance the account can actually spend right now.
+
+        Spendable balance = total native balance
+                          − native ``selling_liabilities`` (XLM locked in
+                            active sell offers on the DEX)
+                          − protocol-required minimum reserve
+                            (``(2 + subentry_count) * 0.5 XLM``)
+
+        Returns ``(spendable, account_exists)``. ``spendable`` may be
+        negative if the account is already below the reserve; callers should
+        treat that as zero available funds.
+        """
+        try:
+            account_info = self.get_account_info(account_id)
+        except RuntimeError:
+            return Decimal('0'), False
+
+        native = self._native_balance_entry(account_info)
+        total = Decimal(native.get('balance', '0'))
+        selling = Decimal(native.get('selling_liabilities', '0') or '0')
+        reserve = self._compute_protocol_reserve(account_info)
+
+        return total - selling - reserve, True
+
     def check_sufficient_balance(self, source_account_id: str, amount: float) -> Tuple[bool, Decimal, str]:
         """
-        Check if account has sufficient balance for payment + fees + minimum balance.
-        
+        Check whether an account can actually send ``amount`` XLM right now.
+
+        Unlike a naive ``balance >= amount`` check, this accounts for:
+          * ``selling_liabilities`` — XLM already pledged to open sell offers
+            on the Stellar DEX, which cannot be spent until those offers are
+            cancelled or filled.
+          * The protocol-required minimum reserve, computed dynamically from
+            the account's ``subentry_count`` (trustlines, offers, signers,
+            data entries). The static ``config.minimum_balance_xlm`` is used
+            only as a fallback when Horizon does not return a subentry count.
+
         Args:
-            source_account_id: Public key of the source account
-            amount: Amount to send in XLM
-            
+            source_account_id: Public key of the source account.
+            amount: Amount to send, in XLM.
+
         Returns:
-            Tuple of (is_sufficient, current_balance, error_message)
+            ``(is_sufficient, total_balance, error_message)``. ``total_balance``
+            is the raw native XLM balance (unchanged from previous versions for
+            backwards compatibility).
         """
-        balance, account_exists = self.get_account_balance(source_account_id)
-        
-        if not account_exists:
-            return False, balance, "Source account not found or not funded"
-        
-        # Calculate total cost: payment + estimated fee + minimum balance reserve
+        try:
+            account_info = self.get_account_info(source_account_id)
+        except RuntimeError:
+            return False, Decimal('0'), "Source account not found or not funded"
+
+        native = self._native_balance_entry(account_info)
+        total_balance = Decimal(native.get('balance', '0'))
+        selling_liabilities = Decimal(native.get('selling_liabilities', '0') or '0')
+        protocol_reserve = self._compute_protocol_reserve(account_info)
+
         payment_amount = Decimal(str(amount))
-        estimated_fee = Decimal('0.00001')  # Base fee
-        minimum_reserve = Decimal(str(config.minimum_balance_xlm))
-        
-        total_required = payment_amount + estimated_fee + minimum_reserve
-        
-        if balance < total_required:
-            return False, balance, (
-                f"Insufficient balance. Required: {total_required} XLM "
-                f"(Payment: {payment_amount}, Fee: {estimated_fee}, Reserve: {minimum_reserve}), "
-                f"Available: {balance} XLM"
+        estimated_fee = Decimal('0.00001')  # Base fee (100 stroops)
+
+        # XLM the account may actually spend right now.
+        spendable = total_balance - selling_liabilities - protocol_reserve
+        required_to_spend = payment_amount + estimated_fee
+
+        if spendable < required_to_spend:
+            parts = [
+                f"Payment: {payment_amount}",
+                f"Fee: {estimated_fee}",
+                f"Reserve: {protocol_reserve}",
+            ]
+            if selling_liabilities > 0:
+                parts.append(f"Selling liabilities: {selling_liabilities}")
+            return False, total_balance, (
+                f"Insufficient spendable balance. "
+                f"Need {required_to_spend} XLM spendable "
+                f"({', '.join(parts)}). "
+                f"Total: {total_balance} XLM, "
+                f"Spendable: {spendable if spendable > 0 else Decimal('0')} XLM"
             )
-        
-        return True, balance, ""
+
+        return True, total_balance, ""
     
     def send_payment(
         self, 
