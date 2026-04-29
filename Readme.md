@@ -11,9 +11,11 @@ We welcome meaningful contributions that improve the project's functionality, do
 ## Features
 
 - 🚀 Simple interactive CLI for sending Stellar payments
+- 🔐 **Multi-signature transaction support** - Create and manage multi-signature accounts
 - ✅ Input validation for addresses and amounts
 - 🔒 Environment-based configuration for security
 - 🧪 Testnet support out of the box
+- 📝 Comprehensive signature collection workflow
 
 ## Installation
 
@@ -59,6 +61,11 @@ DESTINATION_ACCOUNT_ID=
 # Balance Safety Settings
 MINIMUM_BALANCE_XLM=1.0
 BALANCE_CHECK_ENABLED=true
+
+# Multi-Signature Settings
+MULTISIG_ENABLED=true
+DEFAULT_MULTISIG_THRESHOLD=2
+MAX_MULTISIG_SIGNERS=20
 ```
 
 ### Environment Variables
@@ -72,6 +79,9 @@ BALANCE_CHECK_ENABLED=true
 | `DESTINATION_ACCOUNT_ID` | No | Default destination account | - |
 | `MINIMUM_BALANCE_XLM` | No | Minimum XLM balance to maintain | `1.0` |
 | `BALANCE_CHECK_ENABLED` | No | Enable balance checking | `true` |
+| `MULTISIG_ENABLED` | No | Enable multi-signature features | `true` |
+| `DEFAULT_MULTISIG_THRESHOLD` | No | Default signature threshold for new accounts | `2` |
+| `MAX_MULTISIG_SIGNERS` | No | Maximum number of signers allowed | `20` |
 
 ## Usage
 
@@ -89,11 +99,118 @@ stellar-agent
 Follow the prompts to send payments:
 ```
 --- Stellar Agent ---
+1. Send Single Payment
+2. Multi-Signature Operations
+3. Exit
+Select an option (1-3): 1
+
+--- Stellar Agent ---
 Enter destination public key (or type 'exit' to quit): GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H
 Enter amount to send (in XLM): 10
 Sending 10 XLM to GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H...
 ✅ Transaction Successful!
 Transaction Hash: abc123...
+```
+
+## Multi-Signature Support
+
+The SDK now supports comprehensive multi-signature transaction workflows:
+
+### Creating a Multi-Signature Account
+
+```
+--- Multi-Signature Operations ---
+1. Create Multi-Signature Account
+2. Send Multi-Signature Payment
+3. Sign Pending Transaction
+4. Check Account Signers
+5. Back to Main Menu
+Select an option (1-5): 1
+
+--- Create Multi-Signature Account ---
+Enter master account secret key: [SECRET_KEY]
+Add signers (enter 'done' when finished):
+Signer 1 public key (or 'done'): GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H
+Weight for GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H (1-255): 1
+✅ Added signer: GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H (weight: 1)
+Signer 2 public key (or 'done'): GD5T2U74RZTR55FG3QHRJYGHVQX2D6L6KQD5ZQ2Q2Q2Q2Q2Q2Q2Q2Q2Q2
+Weight for GD5T2U74RZTR55FG3QHRJYGHVQX2D6L6KQD5ZQ2Q2Q2Q2Q2Q2Q2Q2Q2Q2 (1-255): 1
+✅ Added signer: GD5T2U74RZTR55FG3QHRJYGHVQX2D6L6KQD5ZQ2Q2Q2Q2Q2Q2Q2Q2Q2Q2 (weight: 1)
+Signer 3 public key (or 'done'): done
+Enter signature threshold (1-255): 2
+Enter starting balance for new account (XLM): 1.0
+
+Creating multi-signature account...
+✅ Multi-signature account created successfully!
+Account ID: NEW_ACCOUNT_ID
+Secret Key: NEW_SECRET_KEY
+Threshold: 2
+Signers:
+  - GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H (weight: 1)
+  - GD5T2U74RZTR55FG3QHRJYGHVQX2D6L6KQD5ZQ2Q2Q2Q2Q2Q2Q2Q2Q2Q2 (weight: 1)
+```
+
+### Sending Multi-Signature Payments
+
+```
+--- Multi-Signature Operations ---
+2. Send Multi-Signature Payment
+
+--- Send Multi-Signature Payment ---
+Enter multi-signature account ID: MULTISIG_ACCOUNT_ID
+Enter destination address: DESTINATION_ADDRESS
+Enter amount to send (XLM): 5.0
+
+Building multi-signature transaction...
+✅ Transaction built successfully!
+Description: Send 5.0 XLM to DESTINATION_ADDRESS
+Required signatures: 2
+Required signers:
+  - GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H
+  - GD5T2U74RZTR55FG3QHRJYGHVQX2D6L6KQD5ZQ2Q2Q2Q2Q2Q2Q2Q2Q2Q2
+
+Do you want to sign this transaction now? (y/n): y
+Enter your secret key: [SIGNER_SECRET_KEY]
+✅ Signature added! Collected: 1/2
+⏳ Need 1 more signatures
+Share the transaction XDR with other signers to collect their signatures:
+[TRANSACTION_XDR]
+```
+
+### Signing Pending Transactions
+
+```
+--- Multi-Signature Operations ---
+3. Sign Pending Transaction
+
+--- Sign Pending Transaction ---
+Enter transaction XDR: [TRANSACTION_XDR]
+Enter network passphrase (default: Test SDF Network ; September 2015): 
+Enter your secret key: [SIGNER_SECRET_KEY]
+
+✅ Signature added successfully!
+Source Account: MULTISIG_ACCOUNT_ID
+Operations: 1
+Transaction ready for submission when 2 signatures are collected
+Updated transaction XDR:
+[UPDATED_TRANSACTION_XDR]
+```
+
+### Checking Account Signers
+
+```
+--- Multi-Signature Operations ---
+4. Check Account Signers
+
+--- Check Account Signers ---
+Enter account ID: ACCOUNT_ID
+
+Account: ACCOUNT_ID
+Thresholds: {'low_threshold': 1, 'med_threshold': 2, 'high_threshold': 3}
+Signers:
+  - GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H (weight: 1)
+  - GD5T2U74RZTR55FG3QHRJYGHVQX2D6L6KQD5ZQ2Q2Q2Q2Q2Q2Q2Q2Q2Q2 (weight: 1)
+✅ Multi-signature setup is valid
 ```
 
 ## Development
@@ -112,8 +229,12 @@ stellar-agent/
 │   ├── cli.py             # CLI interface
 │   ├── client.py          # Stellar client
 │   ├── config.py          # Configuration
+│   ├── multisig.py        # Multi-signature support
 │   └── utils/             # Utilities
+│       ├── validators.py  # Input validation
 ├── tests/                 # Tests
+│   ├── test_multisig.py   # Multi-signature tests
+│   ├── test_multisig_validators.py # Validator tests
 ├── main.py               # Entry point
 └── requirements.txt      # Dependencies
 ```

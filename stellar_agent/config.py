@@ -21,6 +21,11 @@ class Config:
         # Balance safety settings
         self.minimum_balance_xlm = float(os.getenv("MINIMUM_BALANCE_XLM", "1.0"))
         self.balance_check_enabled = os.getenv("BALANCE_CHECK_ENABLED", "true").lower() == "true"
+        
+        # Multi-signature settings
+        self.multisig_enabled = os.getenv("MULTISIG_ENABLED", "true").lower() == "true"
+        self.default_threshold = int(os.getenv("DEFAULT_MULTISIG_THRESHOLD", "2"))
+        self.max_signers = int(os.getenv("MAX_MULTISIG_SIGNERS", "20"))
     
     def validate(self) -> bool:
         """Validate that required configuration is present."""
