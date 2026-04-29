@@ -1,4 +1,6 @@
 stellar-sdk==13.2.1
 python-dotenv==1.2.1
 pytest==9.0.2
+pytest-cov==6.0.0
+pytest-mock==3.14.0
 setuptools==75.0.0
