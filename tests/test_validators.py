@@ -2,7 +2,7 @@
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 from decimal import Decimal
-from stellar_agent.utils.validators import is_valid_stellar_address, is_valid_amount
+from stellar_agent.utils.validators import is_valid_stellar_address, validate_stellar_address, is_valid_amount
 from stellar_agent.client import StellarClient
 from stellar_agent.config import config
 from stellar_sdk.exceptions import NotFoundError, BadRequestError
@@ -64,6 +64,138 @@ class TestValidators:
         assert is_valid_amount(0.0) is False
         # Negative amounts
         assert is_valid_amount(-0.0000001) is False
+
+
+class TestValidateStellarAddress:
+    """Test the enhanced validate_stellar_address function."""
+    
+    def test_valid_address_detailed(self):
+        """Test valid address returns success with empty error message."""
+        valid_address = "GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H"
+        is_valid, error_msg = validate_stellar_address(valid_address)
+        assert is_valid is True
+        assert error_msg == ""
+    
+    def test_empty_address(self):
+        """Test empty address validation."""
+        is_valid, error_msg = validate_stellar_address("")
+        assert is_valid is False
+        assert error_msg == "Address cannot be empty"
+    
+    def test_none_address(self):
+        """Test None address validation."""
+        is_valid, error_msg = validate_stellar_address(None)
+        assert is_valid is False
+        assert error_msg == "Address cannot be empty"
+    
+    def test_whitespace_only_address(self):
+        """Test whitespace-only address validation."""
+        is_valid, error_msg = validate_stellar_address("   ")
+        assert is_valid is False
+        assert error_msg == "Address cannot be empty or whitespace only"
+    
+    def test_address_with_leading_trailing_whitespace(self):
+        """Test address with leading/trailing whitespace."""
+        address = " GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H "
+        is_valid, error_msg = validate_stellar_address(address)
+        assert is_valid is False
+        assert error_msg == "Address cannot contain leading or trailing whitespace"
+    
+    def test_non_string_address(self):
+        """Test non-string address validation."""
+        is_valid, error_msg = validate_stellar_address(12345)
+        assert is_valid is False
+        assert error_msg == "Address must be a string"
+    
+    def test_wrong_length_too_short(self):
+        """Test address that's too short."""
+        short_address = "GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX"
+        is_valid, error_msg = validate_stellar_address(short_address)
+        assert is_valid is False
+        assert "Invalid address length: 55 characters" in error_msg
+        assert "must be exactly 56 characters long" in error_msg
+    
+    def test_wrong_length_too_long(self):
+        """Test address that's too long."""
+        long_address = "GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2HH"
+        is_valid, error_msg = validate_stellar_address(long_address)
+        assert is_valid is False
+        assert "Invalid address length: 57 characters" in error_msg
+        assert "must be exactly 56 characters long" in error_msg
+    
+    def test_secret_key_format(self):
+        """Test address that looks like a secret key."""
+        secret_key = "SBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H"
+        is_valid, error_msg = validate_stellar_address(secret_key)
+        assert is_valid is False
+        assert "appears to be a secret key" in error_msg
+        assert "starts with 'S'" in error_msg
+        assert "Public keys must start with 'G'" in error_msg
+    
+    def test_wrong_prefix_single_letter(self):
+        """Test address with wrong single letter prefix."""
+        wrong_prefix = "ABRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H"
+        is_valid, error_msg = validate_stellar_address(wrong_prefix)
+        assert is_valid is False
+        assert "Invalid address prefix: 'A'" in error_msg
+        assert "must start with 'G'" in error_msg
+    
+    def test_wrong_prefix_non_letter(self):
+        """Test address with non-letter prefix."""
+        wrong_prefix = "1BRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H"
+        is_valid, error_msg = validate_stellar_address(wrong_prefix)
+        assert is_valid is False
+        assert "Invalid address format: Stellar public keys must start with 'G'" in error_msg
+    
+    def test_invalid_characters_single(self):
+        """Test address with single invalid character."""
+        invalid_char_address = "GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2I"  # 'I' is invalid
+        is_valid, error_msg = validate_stellar_address(invalid_char_address)
+        assert is_valid is False
+        assert "Invalid characters in address: I" in error_msg
+        assert "only use letters A-Z and numbers 2-7" in error_msg
+    
+    def test_invalid_characters_multiple(self):
+        """Test address with multiple invalid characters."""
+        invalid_chars_address = "GBRPYHIL1CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H"  # '1' and '8' are invalid
+        is_valid, error_msg = validate_stellar_address(invalid_chars_address)
+        assert is_valid is False
+        assert "Invalid characters in address: 1, 8" in error_msg
+        assert "only use letters A-Z and numbers 2-7" in error_msg
+    
+    def test_invalid_characters_lowercase(self):
+        """Test address with lowercase letters."""
+        lowercase_address = "gbrpyhil2ci3fnq4bxlfmndlfjunpu2hy3zmfshonceoasw7qc7ox2h"
+        is_valid, error_msg = validate_stellar_address(lowercase_address)
+        assert is_valid is False
+        assert "Invalid characters in address:" in error_msg
+        assert "only use letters A-Z and numbers 2-7" in error_msg
+    
+    def test_invalid_characters_numbers(self):
+        """Test address with invalid numbers (0, 1, 8, 9)."""
+        invalid_numbers_address = "GBRPYHIL0CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX9H"
+        is_valid, error_msg = validate_stellar_address(invalid_numbers_address)
+        assert is_valid is False
+        assert "Invalid characters in address: 0, 9" in error_msg
+        assert "only use letters A-Z and numbers 2-7" in error_msg
+    
+    def test_all_valid_characters(self):
+        """Test address with all valid characters."""
+        # This address uses only valid characters (A-Z, 2-7)
+        valid_chars_address = "GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H"
+        is_valid, error_msg = validate_stellar_address(valid_chars_address)
+        assert is_valid is True
+        assert error_msg == ""
+    
+    def test_backward_compatibility_is_valid_stellar_address(self):
+        """Test that is_valid_stellar_address still works as before."""
+        valid_address = "GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H"
+        invalid_address = "ABRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H"
+        
+        assert is_valid_stellar_address(valid_address) is True
+        assert is_valid_stellar_address(invalid_address) is False
+        assert is_valid_stellar_address("") is False
+        assert is_valid_stellar_address(None) is False
 
 
 class TestStellarClientBalanceChecking:
