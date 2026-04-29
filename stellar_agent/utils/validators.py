@@ -29,3 +29,20 @@ def is_valid_amount(amount: float) -> bool:
         True if valid, False otherwise
     """
     return amount > 0
+
+def is_valid_asset_code(asset_code: str) -> bool:
+    """
+    Validate Stellar asset code format.
+    
+    Args:
+        asset_code: Asset code to validate (1-12 alphanumeric characters)
+        
+    Returns:
+        True if valid, False otherwise
+    """
+    if not asset_code:
+        return False
+    
+    # Asset codes are 1-12 alphanumeric characters
+    pattern = r'^[a-zA-Z0-9]{1,12}$'
+    return bool(re.match(pattern, asset_code))
