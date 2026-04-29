@@ -2,7 +2,10 @@
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 from decimal import Decimal
-from stellar_agent.utils.validators import is_valid_stellar_address, validate_stellar_address, is_valid_amount
+from stellar_agent.utils.validators import (
+    is_valid_stellar_address, validate_stellar_address, is_valid_amount, 
+    is_valid_secret_key, validate_stellar_secret_key, validate_transaction_inputs
+)
 from stellar_agent.client import StellarClient
 from stellar_agent.config import config
 from stellar_sdk.exceptions import NotFoundError, BadRequestError
@@ -332,6 +335,125 @@ class TestStellarClientBalanceChecking:
         assert error_msg == "Source account not found or not funded"
 
 
+class TestSecretKeyValidation:
+    """Test secret key validation functions."""
+    
+    def test_valid_secret_key(self):
+        """Test valid Stellar secret key format."""
+        valid_secret = "SBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H"
+        assert is_valid_secret_key(valid_secret) is True
+    
+    def test_invalid_secret_key_wrong_prefix(self):
+        """Test secret key with wrong prefix."""
+        invalid_secret = "GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H"
+        assert is_valid_secret_key(invalid_secret) is False
+    
+    def test_invalid_secret_key_wrong_length(self):
+        """Test secret key with wrong length."""
+        invalid_secret = "SBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX"
+        assert is_valid_secret_key(invalid_secret) is False
+    
+    def test_empty_secret_key(self):
+        """Test empty secret key."""
+        assert is_valid_secret_key("") is False
+        assert is_valid_secret_key(None) is False
+    
+    def test_whitespace_secret_key(self):
+        """Test secret key with whitespace."""
+        assert is_valid_secret_key("  ") is False
+        assert is_valid_secret_key(" SBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H ") is False
+    
+    def test_validate_stellar_secret_key_valid(self):
+        """Test valid secret key validation with detailed messages."""
+        valid_secret = "SBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H"
+        is_valid, error_msg = validate_stellar_secret_key(valid_secret)
+        assert is_valid is True
+        assert error_msg == ""
+    
+    def test_validate_stellar_secret_key_empty(self):
+        """Test empty secret key validation."""
+        is_valid, error_msg = validate_stellar_secret_key("")
+        assert is_valid is False
+        assert error_msg == "Secret key cannot be empty"
+    
+    def test_validate_stellar_secret_key_public_key_format(self):
+        """Test secret key that looks like a public key."""
+        public_key = "GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H"
+        is_valid, error_msg = validate_stellar_secret_key(public_key)
+        assert is_valid is False
+        assert "appears to be a public key" in error_msg
+        assert "starts with 'G'" in error_msg
+    
+    def test_validate_stellar_secret_key_wrong_length_message(self):
+        """Test secret key with wrong length shows proper error message."""
+        short_secret = "SBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX"
+        is_valid, error_msg = validate_stellar_secret_key(short_secret)
+        assert is_valid is False
+        assert "Invalid secret key length: 55 characters" in error_msg
+        assert "must be exactly 56 characters long" in error_msg
+
+
+class TestTransactionInputValidation:
+    """Test comprehensive transaction input validation."""
+    
+    def test_validate_transaction_inputs_success(self):
+        """Test successful validation of all transaction inputs."""
+        source_secret = "SBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H"
+        destination = "GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H"
+        amount = 10.5
+        
+        is_valid, error_msg = validate_transaction_inputs(source_secret, destination, amount)
+        assert is_valid is True
+        assert error_msg == ""
+    
+    def test_validate_transaction_inputs_invalid_secret(self):
+        """Test validation with invalid secret key."""
+        invalid_secret = "invalid_secret"
+        destination = "GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H"
+        amount = 10.5
+        
+        is_valid, error_msg = validate_transaction_inputs(invalid_secret, destination, amount)
+        assert is_valid is False
+        assert "Invalid source secret key" in error_msg
+    
+    def test_validate_transaction_inputs_invalid_destination(self):
+        """Test validation with invalid destination address."""
+        source_secret = "SBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H"
+        invalid_destination = "invalid_address"
+        amount = 10.5
+        
+        is_valid, error_msg = validate_transaction_inputs(source_secret, invalid_destination, amount)
+        assert is_valid is False
+        assert "Invalid destination address" in error_msg
+    
+    def test_validate_transaction_inputs_invalid_amount(self):
+        """Test validation with invalid amount."""
+        source_secret = "SBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H"
+        destination = "GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H"
+        invalid_amount = -10.0
+        
+        is_valid, error_msg = validate_transaction_inputs(source_secret, destination, invalid_amount)
+        assert is_valid is False
+        assert "Invalid amount" in error_msg
+        assert "positive number greater than 0" in error_msg
+    
+    @patch('stellar_agent.utils.validators.Keypair')
+    def test_validate_transaction_inputs_same_source_destination(self, mock_keypair):
+        """Test validation when source and destination are the same."""
+        source_secret = "SBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H"
+        destination = "GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H"
+        amount = 10.5
+        
+        # Mock Keypair to return the same public key as destination
+        mock_keypair_instance = Mock()
+        mock_keypair_instance.public_key = destination
+        mock_keypair.from_secret.return_value = mock_keypair_instance
+        
+        is_valid, error_msg = validate_transaction_inputs(source_secret, destination, amount)
+        assert is_valid is False
+        assert "Source and destination addresses cannot be the same" in error_msg
+
+
 class TestStellarClientPaymentFlow:
     """Test payment flow functionality in StellarClient."""
     
@@ -420,6 +542,91 @@ class TestStellarClientPaymentFlow:
             
             with pytest.raises(RuntimeError, match="Source account .* not found"):
                 self.client.send_payment(self.test_source_secret, self.test_destination, self.test_amount)
+
+    @patch('stellar_agent.client.validate_transaction_inputs')
+    def test_send_payment_validation_failure(self, mock_validate):
+        """Test payment with validation failure."""
+        mock_validate.return_value = (False, "Invalid inputs")
+        
+        with pytest.raises(RuntimeError, match="Validation failed: Invalid inputs"):
+            self.client.send_payment(self.test_source_secret, self.test_destination, self.test_amount)
+    
+    @patch('stellar_agent.client.validate_transaction_inputs')
+    @patch('stellar_agent.client.Keypair')
+    def test_send_payment_enhanced_source_account_not_found(self, mock_keypair_class, mock_validate):
+        """Test payment with enhanced source account not found error."""
+        # Mock validation to pass
+        mock_validate.return_value = (True, "")
+        
+        # Mock Keypair
+        mock_source_keypair = Mock()
+        mock_source_keypair.public_key = "GBRP...OX2H"
+        mock_keypair_class.from_secret.return_value = mock_source_keypair
+        
+        # Mock server to raise NotFoundError
+        with patch.object(self.client, 'server') as mock_server_class:
+            mock_server = mock_server_class.return_value
+            mock_server.load_account.side_effect = NotFoundError("Account not found")
+            
+            with pytest.raises(RuntimeError, match="Source account GBRP...OX2H not found on the Stellar network"):
+                self.client.send_payment(self.test_source_secret, self.test_destination, self.test_amount)
+    
+    @patch('stellar_agent.client.validate_transaction_inputs')
+    @patch('stellar_agent.client.Keypair')
+    @patch.object(StellarClient, 'get_account_info')
+    def test_send_payment_destination_not_found_enhanced(self, mock_get_account_info, mock_keypair_class, mock_validate):
+        """Test payment with enhanced destination not found error."""
+        # Mock validation to pass
+        mock_validate.return_value = (True, "")
+        
+        # Mock Keypair
+        mock_source_keypair = Mock()
+        mock_source_keypair.public_key = "GBRP...OX2H"
+        mock_keypair_class.from_secret.return_value = mock_source_keypair
+        
+        with patch.object(self.client, 'server') as mock_server_class:
+            # Mock Account Load
+            mock_source_account = Mock()
+            mock_server = mock_server_class.return_value
+            mock_server.load_account.return_value = mock_source_account
+            
+            # Mock destination account not found
+            mock_get_account_info.side_effect = RuntimeError("Account not found")
+            
+            with pytest.raises(RuntimeError, match="Destination account .* does not exist"):
+                self.client.send_payment(self.test_source_secret, self.test_destination, self.test_amount)
+    
+    @patch('stellar_agent.client.validate_transaction_inputs')
+    @patch('stellar_agent.client.Keypair')
+    def test_send_payment_enhanced_insufficient_balance(self, mock_keypair_class, mock_validate):
+        """Test payment with enhanced insufficient balance error."""
+        # Mock validation to pass
+        mock_validate.return_value = (True, "")
+        
+        # Mock Keypair
+        mock_source_keypair = Mock()
+        mock_source_keypair.public_key = "GBRP...OX2H"
+        mock_keypair_class.from_secret.return_value = mock_source_keypair
+        
+        with patch.object(self.client, 'server') as mock_server_class:
+            # Mock Account Load
+            mock_source_account = Mock()
+            mock_server = mock_server_class.return_value
+            mock_server.load_account.return_value = mock_source_account
+            
+            # Mock TransactionBuilder chain
+            with patch('stellar_agent.client.TransactionBuilder') as mock_tx_builder_class:
+                mock_tx_builder = mock_tx_builder_class.return_value
+                mock_tx_builder.append_operation.return_value = mock_tx_builder
+                mock_tx_builder.set_timeout.return_value = mock_tx_builder
+                mock_tx_builder.build.return_value = Mock()
+                
+                # Mock transaction submission to fail with insufficient balance
+                mock_server.submit_transaction.side_effect = BadRequestError("insufficient balance")
+                
+                with patch('stellar_agent.client.Asset'):
+                    with pytest.raises(RuntimeError, match="Transaction failed: Insufficient balance for payment and fees"):
+                        self.client.send_payment(self.test_source_secret, self.test_destination, self.test_amount)
 
 
 class TestConfig:

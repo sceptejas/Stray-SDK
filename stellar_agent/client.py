@@ -5,6 +5,7 @@ from stellar_sdk.exceptions import NotFoundError, BadRequestError
 from typing import Dict, Any, Tuple
 from decimal import Decimal
 from .config import config
+from .utils.validators import validate_transaction_inputs, validate_stellar_address
 
 class StellarClient:
     """Client for interacting with Stellar blockchain."""
@@ -103,8 +104,13 @@ class StellarClient:
             Transaction response dictionary
             
         Raises:
-            RuntimeError: If balance is insufficient, network issues, or transaction fails
+            RuntimeError: If validation fails, balance is insufficient, network issues, or transaction fails
         """
+        # Validate all inputs before attempting any operations
+        is_valid, error_msg = validate_transaction_inputs(source_secret, destination_public, amount)
+        if not is_valid:
+            raise RuntimeError(f"Validation failed: {error_msg}")
+        
         try:
             source_keypair = Keypair.from_secret(source_secret)
             source_public_key = source_keypair.public_key
@@ -113,53 +119,130 @@ class StellarClient:
             if config.balance_check_enabled:
                 sufficient, balance, error_msg = self.check_sufficient_balance(source_public_key, amount)
                 if not sufficient:
-                    raise RuntimeError(f"Balance check failed: {error_msg}")
+                    raise RuntimeError(f"Balance check failed: {error_msg} 💡 Please fund your account with additional XLM or reduce the payment amount.")
             
             # Load source account
             try:
                 source_account = self.server.load_account(source_public_key)
             except NotFoundError:
-                raise RuntimeError(f"Source account {source_public_key} not found. Ensure the account is funded and you're connected to the correct network.")
+                raise RuntimeError(
+                    f"Source account {source_public_key} not found on the Stellar network. "
+                    f"💡 Possible solutions:\n"
+                    f"   1. Fund the account with at least 1 XLM to create it\n"
+                    f"   2. Check if you're connected to the correct network (testnet/mainnet)\n"
+                    f"   3. Verify your secret key corresponds to an existing account"
+                )
             except Exception as e:
-                raise RuntimeError(f"Failed to load source account: {e}. Check network connectivity and Horizon URL.")
+                raise RuntimeError(
+                    f"Failed to load source account: {e}. "
+                    f"💡 Please check:\n"
+                    f"   1. Network connectivity to Horizon server\n"
+                    f"   2. Horizon URL configuration\n"
+                    f"   3. Account status on Stellar network"
+                )
+
+            # Validate destination account exists before building transaction
+            try:
+                dest_is_valid, dest_error = validate_stellar_address(destination_public)
+                if not dest_is_valid:
+                    raise RuntimeError(f"Destination address validation failed: {dest_error}")
+                
+                # Check if destination account exists
+                self.get_account_info(destination_public)
+            except RuntimeError as e:
+                if "not found" in str(e).lower():
+                    raise RuntimeError(
+                        f"Destination account {destination_public} does not exist. "
+                        f"💡 The recipient must have an active Stellar account to receive payments. "
+                        f"Ask them to fund their account first, or send at least 1 XLM to create it."
+                    )
+                else:
+                    raise RuntimeError(f"Destination validation failed: {e}")
 
             # Build transaction
-            transaction = (
-                TransactionBuilder(
-                    source_account=source_account,
-                    network_passphrase=config.network_passphrase,
-                    base_fee=100,
-                )
-                .append_operation(
-                    Payment(
-                        destination=destination_public,
-                        asset=Asset.native(),
-                        amount=str(amount)
+            try:
+                transaction = (
+                    TransactionBuilder(
+                        source_account=source_account,
+                        network_passphrase=config.network_passphrase,
+                        base_fee=100,
                     )
+                    .append_operation(
+                        Payment(
+                            destination=destination_public,
+                            asset=Asset.native(),
+                            amount=str(amount)
+                        )
+                    )
+                    .set_timeout(30)
+                    .build()
                 )
-                .set_timeout(30)
-                .build()
-            )
+            except Exception as e:
+                raise RuntimeError(
+                    f"Failed to build transaction: {e}. "
+                    f"💡 Please check transaction parameters and try again."
+                )
 
             # Sign and submit transaction
-            transaction.sign(source_keypair)
+            try:
+                transaction.sign(source_keypair)
+            except Exception as e:
+                raise RuntimeError(
+                    f"Failed to sign transaction: {e}. "
+                    f"💡 Please verify your secret key is correct and try again."
+                )
             
             try:
                 response = self.server.submit_transaction(transaction)
                 return response
             except BadRequestError as e:
-                # Parse common Stellar errors
-                error_detail = str(e)
-                if "insufficient balance" in error_detail.lower():
-                    raise RuntimeError("Transaction failed: Insufficient balance for payment and fees.")
-                elif "destination account does not exist" in error_detail.lower():
-                    raise RuntimeError("Transaction failed: Destination account does not exist. The recipient must have an active Stellar account.")
+                # Parse common Stellar errors with enhanced messages
+                error_detail = str(e).lower()
+                if "insufficient balance" in error_detail:
+                    raise RuntimeError(
+                        "Transaction failed: Insufficient balance for payment and fees. "
+                        f"💡 Your account needs at least {amount + 0.00001 + config.minimum_balance_xlm} XLM. "
+                        f"Current balance is too low to cover the payment, transaction fee (0.00001 XLM), and minimum reserve ({config.minimum_balance_xlm} XLM)."
+                    )
+                elif "destination account does not exist" in error_detail:
+                    raise RuntimeError(
+                        "Transaction failed: Destination account does not exist. "
+                        f"💡 The recipient must have an active Stellar account. "
+                        f"Send at least 1 XLM to create their account first."
+                    )
+                elif "transaction malformed" in error_detail or "invalid transaction" in error_detail:
+                    raise RuntimeError(
+                        "Transaction failed: Invalid transaction format. "
+                        f"💡 This could be due to sequence number issues or network problems. "
+                        f"Please try again in a few moments."
+                    )
+                elif "operation failed" in error_detail:
+                    raise RuntimeError(
+                        "Transaction failed: Operation could not be executed. "
+                        f"💡 This might be due to temporary network issues or account restrictions. "
+                        f"Please try again or check account settings."
+                    )
                 else:
-                    raise RuntimeError(f"Transaction failed: {error_detail}. Check transaction parameters and try again.")
+                    raise RuntimeError(
+                        f"Transaction failed: {e}. "
+                        f"💡 Check transaction parameters, network connectivity, and try again. "
+                        f"If the problem persists, the network might be experiencing high load."
+                    )
             except Exception as e:
-                raise RuntimeError(f"Transaction submission failed: {e}. Check network connectivity and try again.")
+                raise RuntimeError(
+                    f"Transaction submission failed: {e}. "
+                    f"💡 Please check:\n"
+                    f"   1. Network connectivity to Stellar network\n"
+                    f"   2. Horizon server status\n"
+                    f"   3. Transaction was not double-signed\n"
+                    f"   4. Try again in a few moments"
+                )
                 
         except Exception as e:
             if isinstance(e, RuntimeError):
                 raise
-            raise RuntimeError(f"Payment operation failed: {e}")
+            raise RuntimeError(
+                f"Payment operation failed: {e}. "
+                f"💡 Please verify all inputs and try again. "
+                f"If issues persist, check Stellar network status."
+            )
