@@ -189,3 +189,11 @@ MIT License
 ## Disclaimer
 
 This tool is for educational purposes. Always test on testnet before using on mainnet.`
+4
+
+## Installation
+
+```bash
+git clone https://github.com/hiTanishqkuchekar/Stray-SDK.git
+cd Stray-SDK
+pip install -r requirements.txt
