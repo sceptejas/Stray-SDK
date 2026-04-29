@@ -1,7 +1,7 @@
 """Command-line interface for Stellar Agent."""
 from .client import StellarClient
 from .config import config
-from .utils.validators import is_valid_stellar_address, is_valid_amount
+from .utils.validators import is_valid_stellar_address, validate_stellar_address, is_valid_amount
 
 def prompt_and_send():
     """Interactive CLI for sending Stellar payments."""
@@ -23,8 +23,10 @@ def prompt_and_send():
             break
         
         # Validate destination address
-        if not is_valid_stellar_address(destination):
-            print("❌ Invalid Stellar address. Must start with 'G' and be 56 characters long.")
+        is_valid, error_msg = validate_stellar_address(destination)
+        if not is_valid:
+            print(f"❌ Invalid Stellar address: {error_msg}")
+            print("💡 Example of a valid Stellar address: GABCD1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ123456")
             continue
         
         amount_str = input("Enter amount to send (in XLM): ").strip()
