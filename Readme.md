@@ -14,6 +14,7 @@ We welcome meaningful contributions that improve the project's functionality, do
 - ✅ Input validation for addresses and amounts
 - 🔒 Environment-based configuration for security
 - 🧪 Testnet support out of the box
+- 🔑 **Multi-signature (M-of-N) transaction support** — build, co-sign, and submit transactions that require multiple parties to authorise
 
 ## Installation
 
@@ -52,13 +53,19 @@ Run the CLI:
 python main.py
 ```
 
-Or install as a package:
-```bash
-pip install -e .
-stellar-agent
+On startup you will see:
+```
+╔══════════════════════════════════╗
+║       Stellar Agent CLI          ║
+╚══════════════════════════════════╝
+1. Standard payment (single signature)
+2. Multi-signature payment
+3. Exit
 ```
 
-Follow the prompts to send payments:
+### Standard Payment
+
+Select option **1** and follow the prompts:
 ```
 --- Stellar Agent ---
 Enter destination public key (or type 'exit' to quit): GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H
@@ -66,6 +73,77 @@ Enter amount to send (in XLM): 10
 Sending 10 XLM to GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H...
 ✅ Transaction Successful!
 Transaction Hash: abc123...
+```
+
+### Multi-Signature Payment
+
+> **Prerequisites:** The source account must have multisig thresholds configured on-chain first.  See the [Python API](#python-api) section below to call `configure_multisig_account()`.
+
+Select option **2** and follow the prompts:
+```
+--- Stellar Agent · Multi-Sig Payment ---
+Enter destination public key (or 'exit' to quit): GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFSHONUCEOASW7QC7OX2H
+Enter amount to send (in XLM): 50
+Enter an optional memo (press Enter to skip): Q2 payment
+
+Enter co-signer secret keys one at a time.
+Press Enter with no input when done.
+
+Co-signer 1 secret key (or Enter to finish): SCOSIGNERSECRETKEY...
+Co-signer 2 secret key (or Enter to finish): 
+
+🔨 Building multi-sig transaction: 50.0 XLM → GBRP...OX2H ...
+✅ Transaction built with 2 signature(s).
+
+Show XDR for additional offline signing? (y/N): N
+Submit transaction with 2 signature(s)? (y/N): y
+✅ Multi-Sig Transaction Successful!
+Transaction Hash: def456...
+```
+
+#### How multi-sig works (3-step flow)
+
+The `MultiSigClient` supports an **asynchronous pass-around signing** pattern, meaning co-signers do not need to be online simultaneously:
+
+1. **Initiator** calls `build_multisig_payment()` → receives a base-64 XDR string.
+2. **Each co-signer** receives the XDR (via email, API, etc.) and calls `sign_transaction()` → returns updated XDR with one more signature.
+3. **Anyone** calls `submit_transaction(xdr)` once enough signatures are collected.
+
+### Python API
+
+```python
+from stellar_agent.multisig import MultiSigClient
+
+client = MultiSigClient()
+
+# 1. (One-time) Configure the account for 2-of-2 multisig
+client.configure_multisig_account(
+    source_secret="SA...",                  # master key
+    co_signer_public_keys=["GB...", "GC..."],
+    signer_weight=1,
+    low_threshold=2, med_threshold=2, high_threshold=2,
+)
+
+# 2. Build and sign by initiator + any immediately-available co-signers
+xdr = client.build_multisig_payment(
+    source_secret="SA...",
+    destination_public="GD...",
+    amount=100,
+    signers=["SCOSIGNER1...", "SCOSIGNER2..."],  # optional inline signers
+    memo="Invoice #42",
+)
+
+# 3. Optionally add more signatures later (pass-around workflow)
+xdr = client.sign_transaction(xdr, signer_secret="SLATECOSIGNER...")
+
+# 4. Inspect before submitting
+print(client.count_signatures(xdr))   # → 3
+print(client.get_thresholds("GSOURCE..."))
+# → {'low_threshold': 2, 'med_threshold': 2, 'high_threshold': 2}
+
+# 5. Submit
+result = client.submit_transaction(xdr)
+print(result["hash"])
 ```
 
 ## Development
@@ -81,11 +159,14 @@ pytest tests/
 ```
 stellar-agent/
 ├── stellar_agent/          # Main package
-│   ├── cli.py             # CLI interface
-│   ├── client.py          # Stellar client
+│   ├── cli.py             # CLI interface (standard + multi-sig modes)
+│   ├── client.py          # Single-sig Stellar client
 │   ├── config.py          # Configuration
+│   ├── multisig.py        # ✨ Multi-signature client (new)
 │   └── utils/             # Utilities
-├── tests/                 # Tests
+├── tests/
+│   ├── test_client.py     # Tests for StellarClient
+│   └── test_multisig.py   # ✨ 31 tests for MultiSigClient (new)
 ├── main.py               # Entry point
 └── requirements.txt      # Dependencies
 ```
