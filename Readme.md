@@ -21,8 +21,8 @@ We welcome meaningful contributions that improve the project's functionality, do
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/stellar-agent.git
-cd stellar-agent
+git clone https://github.com/omolobamoyinoluwa-max/Stray-SDK.git
+cd Stray-SDK
 ```
 
 2. Install dependencies:
@@ -38,14 +38,42 @@ cp .env.example .env
 
 ## Configuration
 
-Create a `.env` file with your Stellar credentials:
+The application uses environment variables for secure configuration. Copy the example file and configure your settings:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` with your Stellar credentials:
 
 ```env
-SOURCE_SECRET=YOUR_TESTNET_SECRET_KEY_HERE
-MONITOR_ACCOUNT_ID=YOUR_PUBLIC_KEY_HERE
+# Required: Network Configuration
 HORIZON_URL=https://horizon-testnet.stellar.org
 NETWORK_PASSPHRASE=Test SDF Network ; September 2015
+
+# Required: Your Stellar Account Credentials 
+SOURCE_SECRET=YOUR_TESTNET_SECRET_KEY_HERE
+
+# Optional: Account monitoring (if applicable)
+MONITOR_ACCOUNT_ID=YOUR_PUBLIC_KEY_HERE
+DESTINATION_ACCOUNT_ID=
+
+# Balance Safety Settings
+MINIMUM_BALANCE_XLM=1.0
+BALANCE_CHECK_ENABLED=true
 ```
+
+### Environment Variables
+
+| Variable | Required | Description | Default |
+|----------|----------|-------------|---------|
+| `SOURCE_SECRET` | Yes | Your Stellar secret key (56 chars starting with 'S') | - |
+| `HORIZON_URL` | No | Stellar Horizon API URL | `https://horizon-testnet.stellar.org` |
+| `NETWORK_PASSPHRASE` | No | Stellar network passphrase | `Test SDF Network ; September 2015` |
+| `MONITOR_ACCOUNT_ID` | No | Account ID to monitor | - |
+| `DESTINATION_ACCOUNT_ID` | No | Default destination account | - |
+| `MINIMUM_BALANCE_XLM` | No | Minimum XLM balance to maintain | `1.0` |
+| `BALANCE_CHECK_ENABLED` | No | Enable balance checking | `true` |
 
 ## Usage
 
@@ -141,8 +169,8 @@ We welcome contributions from the community! Whether you're fixing bugs, adding 
 
 1. **Fork the repository**
    ```bash
-   git clone https://github.com/yourusername/stellar-agent.git
-   cd stellar-agent
+   git clone https://github.com/omolobamoyinoluwa-max/Stray-SDK.git
+   cd Stray-SDK
    ```
 
 2. **Create a new branch**
