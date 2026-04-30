@@ -163,3 +163,89 @@ class StellarClient:
             if isinstance(e, RuntimeError):
                 raise
             raise RuntimeError(f"Payment operation failed: {e}")
+    
+    def get_transaction_history(
+        self, 
+        account_id: str, 
+        limit: int = 10,
+        include_failed: bool = False
+    ) -> list:
+        """
+        Fetch transaction history for an account.
+        
+        Args:
+            account_id: Public key of the account
+            limit: Maximum number of transactions to fetch (default: 10)
+            include_failed: Whether to include failed transactions (default: False)
+            
+        Returns:
+            List of transaction dictionaries with formatted information
+            
+        Raises:
+            RuntimeError: If account is not found or network issues occur
+        """
+        try:
+            # Fetch transactions from Horizon
+            transactions_call = (
+                self.server.transactions()
+                .for_account(account_id)
+                .limit(limit)
+                .order(desc=True)
+                .call()
+            )
+            
+            transactions = []
+            for tx in transactions_call.get('_embedded', {}).get('records', []):
+                # Skip failed transactions if not requested
+                if not include_failed and not tx.get('successful', True):
+                    continue
+                
+                # Parse transaction details
+                tx_data = {
+                    'hash': tx.get('hash', 'N/A'),
+                    'created_at': tx.get('created_at', 'N/A'),
+                    'source_account': tx.get('source_account', 'N/A'),
+                    'fee_charged': int(tx.get('fee_charged', 0)) / 10000000,  # Convert stroops to XLM
+                    'operation_count': tx.get('operation_count', 0),
+                    'successful': tx.get('successful', True),
+                    'ledger': tx.get('ledger', 'N/A'),
+                }
+                
+                # Fetch operations for this transaction to get payment details
+                try:
+                    operations = self.server.operations().for_transaction(tx['hash']).call()
+                    tx_data['operations'] = []
+                    
+                    for op in operations.get('_embedded', {}).get('records', []):
+                        if op.get('type') == 'payment':
+                            op_data = {
+                                'type': 'payment',
+                                'from': op.get('from', 'N/A'),
+                                'to': op.get('to', 'N/A'),
+                                'amount': op.get('amount', '0'),
+                                'asset_type': op.get('asset_type', 'native'),
+                            }
+                            tx_data['operations'].append(op_data)
+                        elif op.get('type') == 'create_account':
+                            op_data = {
+                                'type': 'create_account',
+                                'account': op.get('account', 'N/A'),
+                                'starting_balance': op.get('starting_balance', '0'),
+                            }
+                            tx_data['operations'].append(op_data)
+                        else:
+                            op_data = {
+                                'type': op.get('type', 'unknown'),
+                            }
+                            tx_data['operations'].append(op_data)
+                except Exception:
+                    tx_data['operations'] = []
+                
+                transactions.append(tx_data)
+            
+            return transactions
+            
+        except NotFoundError:
+            raise RuntimeError(f"Account {account_id} not found on the Stellar network.")
+        except Exception as e:
+            raise RuntimeError(f"Failed to fetch transaction history: {e}")
